@@ -24,11 +24,13 @@ export function rateLimit(identifier: string, max: number = MAX_REQUESTS): { all
 
   // Opportunistic cleanup so the map doesn't grow unbounded on a long-lived warm instance
   if (hits.size > 500) {
-    for (const [key, timestamps] of hits) {
+    const toDelete: string[] = []
+    hits.forEach((timestamps, key) => {
       const fresh = timestamps.filter(t => t > windowStart)
-      if (fresh.length === 0) hits.delete(key)
+      if (fresh.length === 0) toDelete.push(key)
       else hits.set(key, fresh)
-    }
+    })
+    toDelete.forEach(key => hits.delete(key))
   }
 
   return { allowed: true, remaining: max - existing.length }
