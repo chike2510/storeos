@@ -1,0 +1,40 @@
+---
+title: StoreOS Architecture
+---
+flowchart TD
+    A([Customer Message\nEmail / WhatsApp / DM]) --> B
+
+    subgraph PIPELINE ["⚡ StoreOS Autopilot Pipeline"]
+        B[/API: /api/classify/] -->|qwen-max| C{Intent\nClassified}
+        C --> D[/API: /api/embed/]
+        D -->|text-embedding-v4| E[(Customer Context\nOrder History)]
+        E --> F[/API: /api/think/]
+        F -->|qwen3-235b-thinking| G{Risk\nAssessment}
+    end
+
+    G -->|Low Risk| H([Auto-Resolve\nSend Response])
+    G -->|High Risk| I([Human Checkpoint\nApproval Queue])
+
+    I -->|Approve| J([Final Response\nqwen-max polishes])
+    I -->|Reject| K([Escalate / Modify])
+
+    subgraph VISION ["📦 Product Listing Pipeline"]
+        L([Product Photo]) --> M[/API: /api/vision/]
+        M -->|qwen-omni-turbo| N([Generated Listing\nTitle · Price · Tags])
+    end
+
+    subgraph AUDIT ["📋 Audit Trail"]
+        H --> O[(Decision Log)]
+        J --> O
+        K --> O
+    end
+
+    subgraph INFRA ["☁️ Alibaba Cloud"]
+        P[Alibaba Cloud OSS\nFile Storage]
+        Q[Function Compute\nServerless API]
+    end
+
+    style PIPELINE fill:#0f0f1a,stroke:#3b82f6,stroke-width:1px,color:#e8e8e8
+    style VISION fill:#0f0f1a,stroke:#8b5cf6,stroke-width:1px,color:#e8e8e8
+    style AUDIT fill:#0f0f1a,stroke:#22c55e,stroke-width:1px,color:#e8e8e8
+    style INFRA fill:#0f0f1a,stroke:#f59e0b,stroke-width:1px,color:#e8e8e8
