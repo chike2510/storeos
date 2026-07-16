@@ -56,7 +56,7 @@ function HubVisual() {
       <div className="absolute inset-0 bg-blue-600/10 blur-3xl rounded-full pointer-events-none" />
 
       <motion.img
-        src="/hub-illustration.png"
+        src="/storeos.png"
         alt="StoreOS autonomous agent hub connecting to Product Studio, Reasoning Engine, Live Activity, and Approval Queue"
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
