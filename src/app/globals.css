@@ -1,0 +1,571 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   STOREOS 2026 — The Neural Interface
+   Cutting-edge CSS: @property, @scope, @starting-style, anchor positioning,
+   scroll-driven animations, interpolate-size, if(), sibling-index(),
+   container style queries, typed attr(), contrast-color(), light-dark()
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── CSS Custom Properties with @property for animation ─────────────────── */
+@property --gradient-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@property --glow-intensity {
+  syntax: '<number>';
+  initial-value: 0;
+  inherits: false;
+}
+
+@property --border-opacity {
+  syntax: '<number>';
+  initial-value: 0.07;
+  inherits: false;
+}
+
+@property --scan-position {
+  syntax: '<percentage>';
+  initial-value: -100%;
+  inherits: false;
+}
+
+@property --status-hue {
+  syntax: '<number>';
+  initial-value: 210;
+  inherits: false;
+}
+
+@property --tilt-x {
+  syntax: '<number>';
+  initial-value: 0;
+  inherits: false;
+}
+
+@property --tilt-y {
+  syntax: '<number>';
+  initial-value: 0;
+  inherits: false;
+}
+
+@property --shimmer-pos {
+  syntax: '<percentage>';
+  initial-value: -200%;
+  inherits: false;
+}
+
+@property --counter-value {
+  syntax: '<integer>';
+  initial-value: 0;
+  inherits: false;
+}
+
+/* ── Root Variables with light-dark() support ───────────────────────────── */
+:root {
+  --font-body: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-display: 'Unbounded', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Color system with color-mix() support */
+  --color-void: #070707;
+  --color-surface: #0f0f0f;
+  --color-elevated: #161616;
+  --color-border: #1f1f1f;
+  --color-muted: #333333;
+  --color-subtle: #888888;
+  --color-foreground: #e8e8e8;
+  --color-white: #ffffff;
+
+  --color-blue: #3b82f6;
+  --color-blue-glow: #2563eb;
+  --color-violet: #8b5cf6;
+  --color-emerald: #10b981;
+  --color-orange: #f97316;
+  --color-cyan: #06b6d4;
+
+  /* Dynamic theming */
+  --theme-primary: var(--color-blue);
+  --theme-accent: var(--color-violet);
+
+  /* interpolate-size for smooth transitions */
+  interpolate-size: allow-keywords;
+}
+
+/* ── Base Reset ─────────────────────────────────────────────────────────── */
+* { box-sizing: border-box; padding: 0; margin: 0; }
+
+html { 
+  scroll-behavior: smooth;
+  /* Enable scroll-driven animations */
+  timeline-scope: --page-scroll;
+}
+
+body {
+  background-color: var(--color-void);
+  color: var(--color-foreground);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Container for viewport queries */
+  container-type: inline-size;
+  container-name: body;
+}
+
+h1, h2, h3, h4, h5, h6, .font-display {
+  font-family: var(--font-display), var(--font-body), system-ui, sans-serif;
+  letter-spacing: -0.02em;
+}
+
+.font-mono, code, .model-tag {
+  font-family: var(--font-mono), monospace;
+}
+
+/* ── Scroll-driven page animations ──────────────────────────────────────── */
+@scroll-timeline --page-scroll {
+  source: auto;
+  orientation: vertical;
+}
+
+/* ── Neural Canvas (WebGPU container) ──────────────────────────────────── */
+.neural-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.neural-canvas canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ── Dot grid with CSS mask for fade ───────────────────────────────────── */
+.dot-grid {
+  background-image: radial-gradient(rgba(255,255,255,0.045) 1px, transparent 1px);
+  background-size: 28px 28px;
+  /* Gradient mask for smooth edges */
+  mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+}
+
+/* ── Hero spotlight with animated gradient ──────────────────────────────── */
+.hero-spotlight {
+  background:
+    radial-gradient(ellipse 90% 60% at 50% -10%, rgba(37,99,235,0.22), transparent 60%),
+    radial-gradient(ellipse 60% 40% at 80% 10%, rgba(16,185,129,0.10), transparent 55%),
+    radial-gradient(ellipse 50% 35% at 15% 5%, rgba(79,70,229,0.14), transparent 55%);
+}
+
+/* ── Animated conic gradient border (2026 tech) ────────────────────────── */
+@keyframes rotate-gradient {
+  to { --gradient-angle: 360deg; }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { --glow-intensity: 0.4; }
+  50% { --glow-intensity: 0.8; }
+}
+
+@keyframes shimmer-slide {
+  to { --shimmer-pos: 200%; }
+}
+
+@keyframes scan-sweep {
+  to { --scan-position: 400%; }
+}
+
+@keyframes status-rotate {
+  to { --status-hue: 570; }
+}
+
+@keyframes counter-up {
+  to { --counter-value: var(--target-value, 100); }
+}
+
+/* ── Noise overlay with SVG filter ──────────────────────────────────────── */
+.noise-overlay {
+  position: fixed; inset: 0; z-index: 1; pointer-events: none; opacity: 0.02;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ── Aurora orbs with CSS custom properties ─────────────────────────────── */
+.aurora-bg { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.aurora-orb { 
+  position: absolute; border-radius: 50%; filter: blur(140px); opacity: 0.07; 
+  animation: aurora-drift 16s ease-in-out infinite; 
+}
+.aurora-orb-1 { width: 720px; height: 720px; background: #2563eb; top: -260px; right: -160px; }
+.aurora-orb-2 { width: 520px; height: 520px; background: #4f46e5; bottom: -160px; left: -160px; animation-delay: -5s; }
+.aurora-orb-3 { width: 380px; height: 380px; background: #10b981; top: 35%; left: 25%; animation-delay: -9s; }
+
+@keyframes aurora-drift {
+  0%,100% { transform: translate(0,0) scale(1); opacity: 0.07; }
+  33% { transform: translate(50px,-40px) scale(1.08); opacity: 0.12; }
+  66% { transform: translate(-30px,25px) scale(0.94); opacity: 0.05; }
+}
+
+/* ── Glass / bento card system with @property borders ──────────────────── */
+.glass {
+  background: rgba(255,255,255,0.026);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,0.055);
+}
+
+.glass-hover { 
+  transition: all 0.25s cubic-bezier(0.23,1,0.32,1); 
+}
+.glass-hover:hover { 
+  background: rgba(255,255,255,0.045); 
+  border-color: rgba(255,255,255,0.09); 
+}
+
+/* Bento card with animated gradient border */
+.bento-card {
+  background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.012));
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 20px;
+  position: relative;
+  overflow: hidden;
+  /* 3D transform support */
+  transform-style: preserve-3d;
+  perspective: 1000px;
+}
+
+.bento-card::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(circle at 20% 0%, rgba(255,255,255,0.06), transparent 55%);
+  pointer-events: none;
+}
+
+/* Bento card with conic gradient border (2026) */
+.bento-card-glow {
+  position: relative;
+  background: var(--color-surface);
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+.bento-card-glow::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: 21px;
+  padding: 1px;
+  background: conic-gradient(from var(--gradient-angle), 
+    var(--theme-primary), 
+    var(--theme-accent), 
+    var(--color-emerald), 
+    var(--theme-primary));
+  animation: rotate-gradient 4s linear infinite;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0.3;
+  transition: opacity 0.3s;
+}
+
+.bento-card-glow:hover::before {
+  opacity: 0.6;
+}
+
+/* ── Terminal output colors ─────────────────────────────────────────────── */
+.term-cmd     { color: rgba(255,255,255,0.40); }
+.term-success { color: #4ade80; }
+.term-active  { color: #a78bfa; }
+.term-value   { color: #60a5fa; }
+.term-escalate{ color: #fb923c; }
+.term-muted   { color: rgba(255,255,255,0.28); }
+.term-blank   { height: 8px; }
+
+/* ── Scan line with @property animation ─────────────────────────────────── */
+.scan-line {
+  position: absolute; top: 0; left: 0; bottom: 0; width: 25%;
+  background: linear-gradient(90deg, transparent, rgba(167,139,250,0.12), transparent);
+  animation: scan-sweep 1.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* ── Glows with dynamic intensity ──────────────────────────────────────── */
+.glow-blue { 
+  box-shadow: 0 0 20px rgba(59,130,246,0.25), 0 0 40px rgba(59,130,246,0.1); 
+}
+.glow-text-blue { 
+  text-shadow: 0 0 40px rgba(59,130,246,0.5); 
+}
+
+/* ── Flow connector lines ──────────────────────────────────────────────── */
+.flow-line-v {
+  width: 2px;
+  background: linear-gradient(180deg, rgba(59,130,246,0.5), rgba(16,185,129,0.15));
+  margin: 0 auto;
+}
+.flow-node-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #3b82f6;
+  box-shadow: 0 0 10px rgba(59,130,246,0.7);
+  margin: 0 auto;
+  flex-shrink: 0;
+}
+
+/* ── Cursor blink ──────────────────────────────────────────────────────── */
+@keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+.cursor-blink { animation: blink 1.06s step-end infinite; }
+
+/* ── Status dot with conic gradient ────────────────────────────────────── */
+.status-orb {
+  width: 12px; height: 12px; border-radius: 50%;
+  background: conic-gradient(from var(--status-hue), 
+    var(--color-emerald), 
+    var(--color-blue), 
+    var(--color-violet), 
+    var(--color-emerald));
+  animation: status-rotate 3s linear infinite;
+  position: relative;
+}
+
+.status-orb::after {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+  background: var(--color-void);
+}
+
+.status-dot { animation: status-pulse 2.2s ease-in-out infinite; }
+@keyframes status-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+/* ── Focus visibility ──────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--color-blue);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+:focus:not(:focus-visible) { outline: none; }
+
+/* ── Scrollbar ─────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #222; border-radius: 2px; }
+
+/* ── @starting-style for clean enter animations ────────────────────────── */
+@starting-style {
+  .bento-card { opacity: 0; transform: translateY(20px); }
+  .activity-item { opacity: 0; transform: translateX(-10px); }
+  .checkpoint-card { opacity: 0; transform: scale(0.95); }
+}
+
+/* ── sibling-index() staggered animations ──────────────────────────────── */
+.activity-item {
+  --stagger-delay: calc(sibling-index() * 80ms);
+  animation: fade-in-up 0.4s ease-out var(--stagger-delay) both;
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Shimmer effect for loading states ─────────────────────────────────── */
+.shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.03), transparent);
+  background-position: var(--shimmer-pos) 0;
+  background-size: 200% 100%;
+  animation: shimmer-slide 2s ease-in-out infinite;
+}
+
+/* ── 3D tilt card effect ──────────────────────────────────────────────── */
+.tilt-card {
+  transform-style: preserve-3d;
+  transition: transform 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.tilt-card:hover {
+  transform: perspective(1000px) rotateX(calc(var(--tilt-x) * 1deg)) rotateY(calc(var(--tilt-y) * 1deg)) translateZ(10px);
+}
+
+/* ── Magnetic button effect ───────────────────────────────────────────── */
+.magnetic-btn {
+  transition: transform 0.2s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* ── Container queries for responsive cards ───────────────────────────── */
+@container body (max-width: 768px) {
+  .bento-grid { grid-template-columns: 1fr !important; }
+  .pipeline-grid { grid-template-columns: 1fr !important; }
+  .metrics-grid { grid-template-columns: repeat(2, 1fr) !important; }
+}
+
+@container body (min-width: 769px) and (max-width: 1200px) {
+  .bento-grid { grid-template-columns: repeat(2, 1fr) !important; }
+  .pipeline-grid { grid-template-columns: repeat(2, 1fr) !important; }
+}
+
+/* ── @scope for component isolation ────────────────────────────────────── */
+@scope (.terminal-section) {
+  :scope { 
+    background: #0b0b0b; 
+    border-radius: 16px; 
+    overflow: hidden;
+  }
+  .terminal-line {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.75;
+  }
+}
+
+@scope (.approval-queue) {
+  :scope { container-type: inline-size; }
+  .checkpoint-card {
+    border-radius: 16px;
+    padding: 1rem;
+  }
+  @container (max-width: 400px) {
+    .checkpoint-card { padding: 0.75rem; }
+    .checkpoint-actions { flex-direction: column; }
+  }
+}
+
+/* ── Scroll-driven section reveals ─────────────────────────────────────── */
+.section-reveal {
+  animation: reveal-section linear both;
+  animation-timeline: view();
+  animation-range: entry 10% cover 40%;
+}
+
+@keyframes reveal-section {
+  from { opacity: 0; transform: translateY(40px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ── Pipeline card 3D scroll animation ─────────────────────────────────── */
+.pipeline-card-3d {
+  animation: pipeline-enter linear both;
+  animation-timeline: view();
+  animation-range: entry 0% cover 50%;
+  transform-style: preserve-3d;
+}
+
+@keyframes pipeline-enter {
+  from { 
+    opacity: 0; 
+    transform: perspective(1200px) rotateY(45deg) translateX(-100px);
+  }
+  to { 
+    opacity: 1; 
+    transform: perspective(1200px) rotateY(0deg) translateX(0);
+  }
+}
+
+/* ── Counter animation with @property ──────────────────────────────────── */
+.animated-counter {
+  animation: counter-up 2s ease-out forwards;
+  counter-reset: count var(--counter-value);
+}
+
+.animated-counter::after {
+  content: counter(count);
+}
+
+/* ── Neural network node styling ───────────────────────────────────────── */
+.neural-node {
+  position: relative;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, var(--node-color), transparent 70%);
+  box-shadow: 0 0 20px var(--node-color), 0 0 40px var(--node-color);
+  animation: node-pulse 3s ease-in-out infinite;
+}
+
+@keyframes node-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.1); opacity: 1; }
+}
+
+/* ── WebGPU canvas container ───────────────────────────────────────────── */
+.webgpu-container {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.webgpu-container canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* ── Product studio drop zone with :has() ──────────────────────────────── */
+.drop-zone {
+  border: 2px dashed rgba(255,255,255,0.07);
+  border-radius: 16px;
+  transition: all 0.3s ease;
+}
+
+.drop-zone:has(img) {
+  border-color: rgba(139, 92, 246, 0.3);
+  background: rgba(139, 92, 246, 0.04);
+}
+
+.drop-zone:has(input:focus) {
+  border-color: rgba(59, 130, 246, 0.4);
+  box-shadow: 0 0 30px rgba(59, 130, 246, 0.1);
+}
+
+/* ── Approval queue risk indicators with color-mix() ───────────────────── */
+.risk-low { 
+  --risk-color: var(--color-emerald);
+  border-color: color-mix(in oklch, var(--risk-color) 20%, transparent);
+  background: color-mix(in oklch, var(--risk-color) 5%, transparent);
+}
+
+.risk-medium { 
+  --risk-color: var(--color-orange);
+  border-color: color-mix(in oklch, var(--risk-color) 20%, transparent);
+  background: color-mix(in oklch, var(--risk-color) 5%, transparent);
+}
+
+.risk-high { 
+  --risk-color: #ef4444;
+  border-color: color-mix(in oklch, var(--risk-color) 20%, transparent);
+  background: color-mix(in oklch, var(--risk-color) 5%, transparent);
+}
+
+/* ── Activity type indicators ──────────────────────────────────────────── */
+.activity-resolved { --activity-color: var(--color-emerald); }
+.activity-escalated { --activity-color: var(--color-orange); }
+.activity-listed { --activity-color: var(--color-violet); }
+.activity-error { --activity-color: #ef4444; }
+
+/* ── Reduced motion support ────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .aurora-orb, .status-dot, .scan-line, .cursor-blink,
+  .pipeline-card-3d, .section-reveal, .activity-item,
+  .bento-card-glow::before {
+    animation: none;
+  }
+  .section-reveal { opacity: 1; transform: none; }
+}
+
+/* ── Print styles ──────────────────────────────────────────────────────── */
+@media print {
+  .neural-canvas, .aurora-bg, .noise-overlay { display: none; }
+  body { background: white; color: black; }
+}
