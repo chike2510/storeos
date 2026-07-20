@@ -2,24 +2,24 @@
 
 > The AI that runs your store while you sleep.
 
-**Global AI Hackathon with Qwen Cloud — Track 4: Autopilot Agent**
+**Global AI Hackathon with Qwen Cloud - Track 4: Autopilot Agent**
 
 ---
 
 ## What it does
 
-StoreOS is an autonomous e-commerce operations agent. It handles the full customer service and product listing workflow end-to-end — from messy, unstructured inputs to resolved outcomes — with human-in-the-loop checkpoints at every high-stakes decision.
+StoreOS is an autonomous e-commerce operations agent. It handles the full customer service and product listing workflow end-to-end - from messy, unstructured inputs to resolved outcomes - with human-in-the-loop checkpoints at every high-stakes decision.
 
 ### Core Pipeline
 
 **Customer Inbox Autopilot**
-1. Customer sends any message (email, WhatsApp text, DM — deliberately messy and unstructured)
+1. Customer sends any message (email, WhatsApp text, DM - deliberately messy and unstructured)
 2. `qwen-max` classifies intent, extracts urgency and entities from ambiguous input
 3. `text-embedding-v4` performs semantic search over order history and customer context
-4. `qwen3-235b-thinking` reasons through the resolution — refund decisions, dispute handling, policy enforcement
+4. `qwen3-235b-thinking` reasons through the resolution - refund decisions, dispute handling, policy enforcement
 5. Low-risk decisions are auto-resolved with a polished response
 6. High-risk decisions (large refunds, repeat complaints, high urgency) are routed to the human approval queue with full reasoning attached
-7. Human approves or rejects — agent sends final response polished by `qwen-max`
+7. Human approves or rejects - agent sends final response polished by `qwen-max`
 
 **Product Listing Generator**
 - Merchant uploads any product photo
@@ -84,9 +84,9 @@ Open [http://localhost:3000](http://localhost:3000)
 **Track 4: Autopilot Agent**
 
 StoreOS demonstrates all three core requirements:
-- ✅ **Ambiguous inputs** — handles messy real-world customer messages, not structured forms
-- ✅ **External tool invocation** — Qwen Cloud APIs, embedding search, OSS file storage
-- ✅ **Human-in-the-loop checkpoints** — all high-risk decisions require human approval before action
+- ✅ **Ambiguous inputs** : handles messy real-world customer messages, not structured forms
+- ✅ **External tool invocation** : Qwen Cloud APIs, embedding search, OSS file storage
+- ✅ **Human-in-the-loop checkpoints** : all high-risk decisions require human approval before action
 
 ---
 
