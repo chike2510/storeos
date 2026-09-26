@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { qwen, MODELS } from '@/lib/qwen/client'
+import { isDemoMode, qwen, MODELS } from '@/lib/qwen/client'
 import { ClassifiedIntent, CustomerContext, Resolution } from '@/types'
 import { rateLimit, getClientId } from '@/lib/rate-limit'
+import { demoThink } from '@/lib/store/demo-responses'
 
 const VALID_ACTIONS = ['auto_resolve', 'escalate', 'refund', 'replace', 'info_provided']
 const VALID_RISK = ['low', 'medium', 'high']
@@ -47,6 +48,10 @@ export async function POST(req: NextRequest) {
 
   if (!intent || !context) {
     return NextResponse.json({ error: 'Missing intent or context' }, { status: 400 })
+  }
+
+  if (isDemoMode) {
+    return NextResponse.json({ resolution: demoThink(intent, context), model: 'demo-rules', mode: 'demo' })
   }
 
   try {

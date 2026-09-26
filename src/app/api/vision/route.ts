@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { qwen, MODELS } from '@/lib/qwen/client'
+import { isDemoMode, qwen, MODELS } from '@/lib/qwen/client'
 import { rateLimit, getClientId } from '@/lib/rate-limit'
+import { demoListing } from '@/lib/store/demo-responses'
 
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 const MAX_BASE64_LENGTH = 7_000_000 // ~5MB image, base64-inflated
@@ -22,6 +23,10 @@ export async function POST(req: NextRequest) {
   }
   if (imageBase64.length > MAX_BASE64_LENGTH) {
     return NextResponse.json({ error: 'Image too large (max ~5MB)' }, { status: 400 })
+  }
+
+  if (isDemoMode) {
+    return NextResponse.json({ listing: demoListing(), model: 'demo-vision', mode: 'demo' })
   }
 
   try {

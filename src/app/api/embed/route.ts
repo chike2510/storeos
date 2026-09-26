@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { qwen, MODELS } from '@/lib/qwen/client'
+import { isDemoMode, qwen, MODELS } from '@/lib/qwen/client'
 import { mockCustomers, mockOrders, cosineSimilarity } from '@/lib/store/mock-data'
 import { rateLimit, getClientId } from '@/lib/rate-limit'
+import { demoContext, demoClassify } from '@/lib/store/demo-responses'
 
 export async function POST(req: NextRequest) {
   const clientId = getClientId(req)
@@ -17,6 +18,12 @@ export async function POST(req: NextRequest) {
   }
   if (query.length > 2000) {
     return NextResponse.json({ error: 'Query too long' }, { status: 400 })
+  }
+
+  if (isDemoMode) {
+    const intent = demoClassify(query)
+    const { customer, relevantOrders } = demoContext({ ...intent, extractedEntities: extractedEntities || intent.extractedEntities })
+    return NextResponse.json({ customer, relevantOrders, embeddingModel: 'demo-search', mode: 'demo' })
   }
 
   try {

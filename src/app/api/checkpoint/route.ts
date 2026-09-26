@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { qwen, MODELS } from '@/lib/qwen/client'
+import { isDemoMode, qwen, MODELS } from '@/lib/qwen/client'
 import { HumanCheckpoint } from '@/types'
 import { rateLimit, getClientId } from '@/lib/rate-limit'
 
@@ -79,6 +79,15 @@ export async function PATCH(req: NextRequest) {
 
   if (action === 'approved') {
     const finalMessage = humanOverride || checkpoint.resolution.draftResponse
+
+    if (isDemoMode) {
+      return NextResponse.json({
+        success: true,
+        finalResponse: finalMessage,
+        checkpoint,
+        mode: 'demo',
+      })
+    }
 
     const finalResponse = await qwen.chat.completions.create({
       model: MODELS.MAX,

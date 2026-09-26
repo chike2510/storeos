@@ -367,6 +367,7 @@ function CheckpointCard({ cp, onApprove, onReject, processing }: {
 export default function Dashboard() {
   const [isRunning, setIsRunning] = useState(false)
   const [isLive, setIsLive] = useState(false)
+  const [runtimeMode, setRuntimeMode] = useState<'demo' | 'live'>('demo')
   const [currentMsg, setCurrentMsg] = useState<string|null>(null)
   const [termLines, setTermLines] = useState<TermLine[]>([])
   const [activity, setActivity] = useState<ActivityItem[]>([])
@@ -387,6 +388,13 @@ export default function Dashboard() {
   useEffect(() => {
     cancelledRef.current = false
     return () => { cancelledRef.current = true }
+  }, [])
+
+  useEffect(() => {
+    fetch('/api/health')
+      .then(response => response.ok ? response.json() : null)
+      .then(data => { if (data?.mode === 'live' || data?.mode === 'demo') setRuntimeMode(data.mode) })
+      .catch(() => setRuntimeMode('demo'))
   }, [])
 
   useEffect(() => {
@@ -573,7 +581,7 @@ export default function Dashboard() {
             <div className="flex items-center gap-2 mb-1">
               <div className={`w-1.5 h-1.5 rounded-full ${isLive ? 'bg-emerald-400 status-dot' : 'bg-white/15'}`} />
               <span className="font-mono text-[10px] text-white/22 uppercase tracking-widest">
-                {isLive ? 'Neural agent operating' : 'Qwen Cloud · Autopilot Agent'}
+                {isLive ? 'Neural agent operating' : runtimeMode === 'demo' ? 'Demo workspace · Autopilot Agent' : 'Qwen Cloud · Autopilot Agent'}
               </span>
             </div>
             <Link href="/">

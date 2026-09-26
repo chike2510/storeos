@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { qwen, MODELS } from '@/lib/qwen/client'
+import { isDemoMode, qwen, MODELS } from '@/lib/qwen/client'
 import { ClassifiedIntent } from '@/types'
 import { rateLimit, getClientId } from '@/lib/rate-limit'
+import { demoClassify } from '@/lib/store/demo-responses'
 
 export async function POST(req: NextRequest) {
   const clientId = getClientId(req)
@@ -17,6 +18,10 @@ export async function POST(req: NextRequest) {
   }
   if (message.length > 2000) {
     return NextResponse.json({ error: 'Message too long' }, { status: 400 })
+  }
+
+  if (isDemoMode) {
+    return NextResponse.json({ ...demoClassify(message), model: 'demo-rules', mode: 'demo' })
   }
 
   try {

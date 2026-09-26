@@ -1,94 +1,94 @@
 # StoreOS
 
-> The AI that runs your store while you sleep.
+> AI customer support automation for small ecommerce teams—with human approval when it matters.
 
-**Global AI Hackathon with Qwen Cloud - Track 4: Autopilot Agent**
+StoreOS is a SaaS foundation for Shopify-first merchants who want to automate repetitive support work without giving up control over refunds, complaints, and high-risk decisions.
 
----
+## Product workflow
 
-## What it does
+1. A customer sends a messy message.
+2. StoreOS classifies the intent, urgency, and entities.
+3. It finds relevant customer and order context.
+4. It recommends a resolution and applies risk policy.
+5. Low-risk requests are resolved automatically.
+6. High-risk requests enter a human approval queue with an explainable rationale.
+7. The final response is recorded in the activity trail.
 
-StoreOS is an autonomous e-commerce operations agent. It handles the full customer service and product listing workflow end-to-end - from messy, unstructured inputs to resolved outcomes - with human-in-the-loop checkpoints at every high-stakes decision.
+The product also includes a product studio that turns an uploaded product image into an editable listing draft.
 
-### Core Pipeline
+## Current SaaS foundation
 
-**Customer Inbox Autopilot**
-1. Customer sends any message (email, WhatsApp text, DM - deliberately messy and unstructured)
-2. `qwen-max` classifies intent, extracts urgency and entities from ambiguous input
-3. `text-embedding-v4` performs semantic search over order history and customer context
-4. `qwen3-235b-thinking` reasons through the resolution - refund decisions, dispute handling, policy enforcement
-5. Low-risk decisions are auto-resolved with a polished response
-6. High-risk decisions (large refunds, repeat complaints, high urgency) are routed to the human approval queue with full reasoning attached
-7. Human approves or rejects - agent sends final response polished by `qwen-max`
+- **Demo mode by default:** the full workflow works without API credentials using deterministic local rules and fixtures.
+- **Live Qwen mode:** set `STOREOS_MODE=live` and `QWEN_API_KEY` to use Qwen Cloud.
+- **Health endpoint:** `GET /api/health` reports service health, runtime mode, and configured model names.
+- **Safety boundaries:** request limits, prompt-injection boundaries, output normalization, and server-side refund policy enforcement.
+- **Human checkpoint:** approvals and rejections are kept behind an explicit review step.
 
-**Product Listing Generator**
-- Merchant uploads any product photo
-- `qwen-omni-turbo` (vision model) analyzes the image and generates a complete listing: title, description, category, price range, tags, and key highlights
-- Ready to publish in seconds
+> Demo mode is intentionally obvious in the dashboard. It is useful for portfolio reviewers and local development; it is not a substitute for persistent production storage or live commerce integrations.
 
----
-
-## Qwen Cloud Models Used
-
-| Model | Role |
-|-------|------|
-| `qwen-max` | Customer message drafting, intent classification, response polishing |
-| `qwen3-235b-thinking` | Dispute reasoning, refund decisions, risk assessment |
-| `qwen-omni-turbo` | Product photo → listing generation (vision) |
-| `text-embedding-v4` | Semantic search over order history and customer profiles |
-
----
-
-## Tech Stack
+## Tech stack
 
 - **Frontend:** Next.js 14, React, Tailwind CSS, Framer Motion
-- **Backend:** Next.js API Routes (serverless)
-- **AI:** Qwen Cloud via DashScope API (`dashscope-intl.aliyuncs.com`)
-- **Storage:** Alibaba Cloud OSS (product images)
-- **Deployment:** Alibaba Cloud / Vercel
+- **Backend:** Next.js App Router API routes
+- **AI:** Qwen Cloud through its OpenAI-compatible API
+- **Demo data:** typed local fixtures and deterministic fallback responses
+- **Deployment target:** Vercel or Alibaba Cloud
 
----
-
-## Architecture
-
-See `ARCHITECTURE.mermaid` for the full system diagram.
-
-See `alibaba-cloud-proof.ts` for Alibaba Cloud service integration details.
-
----
-
-## Running Locally
+## Run locally
 
 ```bash
-# Clone
 git clone https://github.com/chike2510/storeos
 cd storeos
-
-# Install
 npm install
-
-# Environment
-cp .env.local.example .env.local
-# Add your QWEN_API_KEY from https://home.qwencloud.com
-
-# Run
+cp .env.example .env.local
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000)
+Open [http://localhost:3000](http://localhost:3000).
 
----
+### Live AI mode
 
-## Hackathon Track
+```bash
+STOREOS_MODE=live
+QWEN_API_KEY=your_key_here
+QWEN_THINKING_MODEL=qwen3-235b-thinking
+```
 
-**Track 4: Autopilot Agent**
+Keep secrets in `.env.local`; never commit them.
 
-StoreOS demonstrates all three core requirements:
-- ✅ **Ambiguous inputs** : handles messy real-world customer messages, not structured forms
-- ✅ **External tool invocation** : Qwen Cloud APIs, embedding search, OSS file storage
-- ✅ **Human-in-the-loop checkpoints** : all high-risk decisions require human approval before action
+## Useful commands
 
----
+```bash
+npm run dev       # local development
+npm run lint      # Next.js lint checks
+npm run typecheck # TypeScript validation
+npm run build     # production build
+```
+
+## API surface
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/health` | Runtime health and demo/live status |
+| `POST /api/classify` | Classify a customer message |
+| `POST /api/embed` | Retrieve relevant customer/order context |
+| `POST /api/think` | Recommend a resolution and risk level |
+| `POST /api/checkpoint` | Create or action a human approval checkpoint |
+| `POST /api/vision` | Generate a product listing draft from an image |
+
+## Roadmap to production SaaS
+
+1. Persistent Postgres/Supabase data model and durable audit events
+2. Merchant authentication, workspaces, roles, and tenant isolation
+3. Shopify OAuth and order/customer synchronization
+4. Configurable merchant policies for refunds, returns, and escalation
+5. Stripe subscriptions, usage metering, and plan limits
+6. Inbox ingestion for email and additional commerce channels
+7. Evaluation suite for AI resolution quality and regression testing
+
+## Origin
+
+StoreOS began as a Global AI Hackathon project for Qwen Cloud’s Track 4: Autopilot Agent. It is now being developed as a standalone SaaS product.
 
 ## License
 
