@@ -4,6 +4,7 @@ import { enforcePolicy } from '@/lib/ai/policy'
 import type { TriageContext } from '@/lib/ai/schema'
 import type { Conversation, Customer, Message, Order, Policies } from '@/lib/types'
 import type { WorkspaceContext } from '@/lib/workspace'
+import { createShopifyRefund, type RefundResult } from '@/lib/shopify/writeback'
 
 type OrderWithItems = Order & { order_items: { title: string; quantity: number }[] }
 
@@ -130,11 +131,30 @@ export async function triageConversation(ctx: WorkspaceContext, conversationId: 
   const linkedTotal = linkedOrder ? Number(linkedOrder.total) - Number(linkedOrder.refunded_amount) : null
   const resolved = await resolveMessage(classified.result, triageCtx, linkedTotal)
   const { resolution, notes } = enforcePolicy(resolved.result, classified.result, triageCtx, policies, linkedTotal)
-  // Refunds on Shopify orders move real money through Shopify, so they always
-  // go to a human — even within the auto-refund limit.
-  if (resolution.action === 'refund' && linkedOrder?.source === 'shopify' && !resolution.requiresApproval) {
-    resolution.requiresApproval = true
-    notes.push('Refunds on Shopify orders move real money and always need human approval')
+
+  // Within-policy refunds on Shopify orders are issued in Shopify before the
+  // reply goes out. If Shopify refuses, fall back to human approval so the
+  // customer is never told about a refund that didn't happen.
+  let shopifyRefund: RefundResult | null = null
+  if (
+    !resolution.requiresApproval &&
+    resolution.action === 'refund' &&
+    resolution.refundAmount &&
+    linkedOrder?.source === 'shopify'
+  ) {
+    try {
+      if (!linkedOrder.external_id) throw new Error('order is missing its Shopify id')
+      shopifyRefund = await createShopifyRefund({
+        workspaceId: workspace.id,
+        orderExternalId: linkedOrder.external_id,
+        amount: resolution.refundAmount,
+        note: 'Auto-approved by StoreOS AI within the refund policy',
+        idempotencyKey: latest.id,
+      })
+    } catch (e) {
+      resolution.requiresApproval = true
+      notes.push(`Shopify refund failed (${e instanceof Error ? e.message : 'unknown error'}) — needs review`)
+    }
   }
   const autoSend = !resolution.requiresApproval
 
@@ -173,7 +193,22 @@ export async function triageConversation(ctx: WorkspaceContext, conversationId: 
       body: resolution.draftReply,
       ai_decision_id: decision.id,
     })
-    if (resolution.action === 'refund' && resolution.refundAmount && linkedOrder) {
+    if (shopifyRefund && linkedOrder) {
+      await supabase.from('audit_events').insert({
+        workspace_id: workspace.id,
+        actor_type: 'ai',
+        action: 'shopify.refund_created',
+        entity_type: 'order',
+        entity_id: linkedOrder.id,
+        metadata: {
+          decision_id: decision.id,
+          refund_id: shopifyRefund.refundId,
+          amount: shopifyRefund.amount,
+          currency: shopifyRefund.currency,
+          via: 'auto_policy',
+        },
+      })
+    } else if (resolution.action === 'refund' && resolution.refundAmount && linkedOrder && linkedOrder.source !== 'shopify') {
       // Records the refund on the order (restocking is a human call). Payment movement is not wired in v1.
       await supabase.rpc('set_order_status', {
         p_order: linkedOrder.id,
