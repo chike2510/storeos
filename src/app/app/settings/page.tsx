@@ -47,7 +47,7 @@ export default async function SettingsPage() {
       <PageHeader title="Settings" description={`Manage ${workspace.name}.`} />
       {!admin ? (
         <Alert tone="info" className="mb-6">
-          You're a staff member. Ask an owner or admin to change workspace settings.
+          You&apos;re a staff member. Ask an owner or admin to change workspace settings.
         </Alert>
       ) : null}
 
