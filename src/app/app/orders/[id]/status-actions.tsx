@@ -31,16 +31,33 @@ export function StatusActions({
   status,
   total,
   currency,
+  managedBy = null,
 }: {
   action: (s: ActionState, fd: FormData) => Promise<ActionState>
   orderId: string
   status: OrderStatus
   total: number
   currency: string
+  /** 'shopify': status is synced from Shopify; only refunds (via Shopify) are offered here. */
+  managedBy?: 'shopify' | null
 }) {
   const [refunding, setRefunding] = useState(false)
-  const options = NEXT[status]
+  const shopify = managedBy === 'shopify'
+  const options: OrderStatus[] = shopify
+    ? ['paid', 'fulfilled', 'delivered', 'refunded'].includes(status) && total > 0
+      ? ['refunded']
+      : []
+    : NEXT[status]
   const forward = options.filter(s => s !== 'cancelled' && s !== 'refunded')
+
+  if (shopify && options.length === 0) {
+    return (
+      <Card>
+        <CardHeader title="Status" />
+        <CardBody className="text-sm text-zinc-500">Synced from Shopify. Fulfil, cancel or edit this order in Shopify — StoreOS updates automatically.</CardBody>
+      </Card>
+    )
+  }
 
   if (options.length === 0) {
     return (
@@ -86,11 +103,15 @@ export function StatusActions({
             <ActionForm action={action} className="space-y-3 rounded-lg border border-zinc-200 p-3">
               <input type="hidden" name="order_id" value={orderId} />
               <input type="hidden" name="status" value="refunded" />
-              <Field label="Refund amount" htmlFor="refund_amount" hint={`Order total ${formatMoney(total, currency)}`}>
+              <Field
+                label="Refund amount"
+                htmlFor="refund_amount"
+                hint={shopify ? `Up to ${formatMoney(total, currency)} · refunded to the customer through Shopify` : `Order total ${formatMoney(total, currency)}`}
+              >
                 <Input id="refund_amount" name="refund_amount" inputMode="decimal" defaultValue={total} />
               </Field>
               <Input name="note" placeholder="Reason (optional)" aria-label="Reason" />
-              <Checkbox name="restock" defaultChecked label="Return items to stock" />
+              {shopify ? null : <Checkbox name="restock" defaultChecked label="Return items to stock" />}
               <div className="flex gap-2">
                 <SubmitButton variant="danger" className="flex-1">
                   Refund
@@ -110,7 +131,11 @@ export function StatusActions({
             </button>
           )
         ) : null}
-        <p className="pt-1 text-xs text-zinc-400">Refunds are recorded here; send the money back through your payment provider.</p>
+        <p className="pt-1 text-xs text-zinc-400">
+          {shopify
+            ? 'Synced from Shopify. Fulfil or cancel in Shopify; refunds here move money through Shopify (owners and admins).'
+            : 'Refunds are recorded here; send the money back through your payment provider.'}
+        </p>
       </CardBody>
     </Card>
   )

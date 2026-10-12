@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Bot, Store, Trash2 } from 'lucide-react'
+import { Bot, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardBody, CardFooter, CardHeader } from '@/components/ui/card'
@@ -21,19 +21,30 @@ import {
   updatePolicies,
   updateWorkspace,
 } from './actions'
+import { SHOPIFY_CONNECTION_COLUMNS, ShopifyIntegration, type ShopifyConnectionView, type ShopifySyncRunView } from './shopify-integration'
 
 export const metadata: Metadata = { title: 'Settings' }
+// Shopify connect / Sync now run a time-boxed sync inside the server action.
+export const maxDuration = 60
 
 const TIMEZONES = ['Africa/Lagos', 'Africa/Accra', 'Africa/Nairobi', 'Africa/Johannesburg', 'Europe/London', 'Europe/Berlin', 'America/New_York', 'America/Chicago', 'America/Los_Angeles', 'Asia/Kolkata', 'Asia/Dubai', 'UTC']
 
-export default async function SettingsPage() {
+export default async function SettingsPage({ searchParams }: { searchParams: { shopify?: string; shopify_error?: string } }) {
   const { supabase, workspace, role, user } = await requireWorkspace()
   const admin = canManage(role)
-  const [{ data: pol }, { data: members }, { data: invites }, { count: demoCount }] = await Promise.all([
+  const [{ data: pol }, { data: members }, { data: invites }, { count: demoCount }, { data: shopifyConn }, { data: shopifyRuns }] = await Promise.all([
     supabase.from('policies').select('*').eq('workspace_id', workspace.id).single(),
     supabase.rpc('workspace_member_directory', { p_workspace: workspace.id }),
     supabase.from('workspace_invitations').select('*').eq('workspace_id', workspace.id).is('accepted_at', null).order('created_at'),
     supabase.from('products').select('id', { count: 'exact', head: true }).eq('workspace_id', workspace.id).contains('tags', ['demo']),
+    // RLS: owners/admins only; staff get null.
+    supabase.from('shopify_connections').select(SHOPIFY_CONNECTION_COLUMNS).eq('workspace_id', workspace.id).maybeSingle(),
+    supabase
+      .from('shopify_sync_runs')
+      .select('id, trigger, status, stats, error, started_at')
+      .eq('workspace_id', workspace.id)
+      .order('started_at', { ascending: false })
+      .limit(5),
   ])
   const policies = pol as Policies | null
   const team = (members ?? []) as MemberRow[]
@@ -48,6 +59,17 @@ export default async function SettingsPage() {
       {!admin ? (
         <Alert tone="info" className="mb-6">
           You&apos;re a staff member. Ask an owner or admin to change workspace settings.
+        </Alert>
+      ) : null}
+
+      {searchParams.shopify ? (
+        <Alert tone="success" className="mb-6">
+          {searchParams.shopify}
+        </Alert>
+      ) : null}
+      {searchParams.shopify_error ? (
+        <Alert tone="error" className="mb-6">
+          Shopify: {searchParams.shopify_error}
         </Alert>
       ) : null}
 
@@ -238,18 +260,13 @@ export default async function SettingsPage() {
         </Card>
 
         {/* Integrations */}
-        <Card>
-          <CardHeader title="Integrations" />
-          <CardBody className="flex items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
-              <Store className="h-4 w-4" />
-            </span>
-            <div className="flex-1">
-              <p className="text-sm font-medium text-zinc-900">Shopify</p>
-              <p className="text-xs text-zinc-500">Sync products, orders and customers from your Shopify store.</p>
-            </div>
-            <Badge>Coming soon</Badge>
-          </CardBody>
+        <Card id="integrations">
+          <CardHeader title="Integrations" description="Connect the tools you already sell with." />
+          <ShopifyIntegration
+            admin={admin}
+            conn={(shopifyConn as ShopifyConnectionView | null) ?? null}
+            runs={(shopifyRuns ?? []) as ShopifySyncRunView[]}
+          />
         </Card>
 
         {/* Demo data */}

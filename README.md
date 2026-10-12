@@ -5,7 +5,7 @@
 StoreOS serves two kinds of businesses:
 
 - **Social & direct sellers** (Instagram, WhatsApp, own website, in person). StoreOS is the system of record: every product, stock movement, order and customer lives here.
-- **Shopify merchants.** StoreOS layers on top of Shopify for support triage, approvals, listings and customer insight. The data model is sync-ready (`source` + `external_id` on every syncable table); the Shopify connector itself is on the roadmap.
+- **Shopify merchants.** StoreOS layers on top of Shopify for support triage, approvals, listings and customer insight. Connect a store in **Settings → Integrations**: products (with variants and stock), customers and orders sync into the same tables (`source = 'shopify'`, `external_id` = Shopify GID), webhooks keep them current, and stock adjustments and approved refunds are written back to Shopify.
 
 Currency is a per-workspace setting (NGN by default; USD, GBP, EUR, GHS, KES, ZAR, CAD, INR supported in the UI).
 
@@ -63,8 +63,12 @@ npm run dev
 |---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | yes | e.g. `https://tjqldcvlcbxhbvovhmmp.supabase.co` |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | yes | Project Settings → API |
-| `SUPABASE_SERVICE_ROLE_KEY` | no (reserved) | Server-only. Not used by v1 flows; reserved for webhooks / Shopify sync |
-| `NEXT_PUBLIC_SITE_URL` | yes in prod | Used for magic-link and confirmation redirects |
+| `SUPABASE_SERVICE_ROLE_KEY` | for Shopify | Server-only. Used only by the Shopify connector (credential storage, sync, webhooks, cron) |
+| `STOREOS_ENCRYPTION_KEY` | for Shopify | 32-byte key (`openssl rand -base64 32`) for AES-256-GCM encryption of Shopify client secrets and tokens. Changing it makes saved connections unreadable (reconnect) |
+| `CRON_SECRET` | for the cron | Vercel sends it as `Authorization: Bearer …` to `/api/cron/shopify-sync`; the route refuses requests without it |
+| `SHOPIFY_CLIENT_ID` / `SHOPIFY_CLIENT_SECRET` | no | App-level credentials for OAuth installs started without entering them in Settings |
+| `SHOPIFY_REDIRECT_URI` | no | Defaults to `NEXT_PUBLIC_SITE_URL/api/shopify/callback`; must match the Dev Dashboard redirect URL |
+| `NEXT_PUBLIC_SITE_URL` | yes in prod | Used for magic-link and confirmation redirects, and as the Shopify webhook base URL (`/api/shopify/webhooks`) |
 | `AI_BASE_URL` | no | Default `https://generativelanguage.googleapis.com/v1beta/openai/` |
 | `AI_API_KEY` | no | Empty = demo AI |
 | `AI_MODEL` | no | Default `gemini-2.5-flash` |
@@ -91,6 +95,7 @@ Apply the migrations in `supabase/migrations/` in order (Supabase CLI `supabase 
 | `20261012000004_rls.sql` | RLS on every table, scoped to workspace membership; admin-only deletes/settings; append-only ledgers |
 | `20261012000005_storage.sql` | `product-images` bucket (public read, 5 MB, images only) with member-only writes under `<workspace_id>/` |
 | `20261012000006_demo_seed.sql` | `seed_demo_workspace(ws)` / `clear_demo_workspace(ws)` |
+| `20261012000007_shopify.sql` | `shopify_connections` (encrypted credentials, owner/admin RLS, ciphertext columns not selectable by users), `shopify_sync_runs`, `shopify_webhook_events` (idempotency), service-role-only `shopify_upsert_*` functions, `orders.external_name/financial_status/fulfillment_status`, `product_variants.external_inventory_item_id` |
 
 Supabase Auth settings to check: add `<site>/auth/callback` and `<site>/auth/confirm` to the redirect allow-list, and set the Site URL.
 
@@ -98,12 +103,25 @@ Supabase Auth settings to check: add `<site>/auth/callback` and `<site>/auth/con
 
 Tick **Load sample data** during onboarding, or use **Settings → Demo data**. From SQL: `select public.seed_demo_workspace('<workspace-id>');`
 
+## Shopify integration
+
+Admin GraphQL API `2026-10`. Scopes: `read/write_products`, `read/write_orders`, `read/write_customers`, `read/write_inventory`, `read/write_fulfillments`, `read_locations`.
+
+- **Connect** (Settings → Integrations → Shopify): shop domain (`xxx.myshopify.com`, or paste any admin URL), client ID and secret from the Dev Dashboard app.
+  - *Client credentials* — for stores in the same Shopify organization as the app. StoreOS exchanges the ID/secret at `POST https://{shop}/admin/oauth/access_token` (`grant_type=client_credentials`) and re-requests the ~24 h token automatically before it expires.
+  - *Install via OAuth* — for merchant-owned stores: `/api/shopify/install?shop=…` (signed, 10-minute state cookie) → Shopify → `/api/shopify/callback` (state + HMAC + timestamp verified) → expiring offline token + refresh token, refreshed automatically.
+- **Secrets**: client secret, access token and refresh token are encrypted in Node with AES-256-GCM (`STOREOS_ENCRYPTION_KEY`, AAD bound to workspace + column) and only ever read with the service role. Users can't select those columns at all.
+- **Sync** (on connect, **Sync now**, and the daily cron): products + all variants + stock, customers, orders + line items + financial/fulfilment status. Paginated, cost-aware (pauses when the GraphQL bucket runs low; retries on `THROTTLED`/429/5xx), time-boxed with a saved cursor so large stores finish over several runs, incremental by `updated_at` after the first pass. Upserts are idempotent and keyed by Shopify GID; stock differences go through the `inventory_movements` ledger as `sync` movements; re-syncing an order never consumes a StoreOS order number.
+- **Webhooks** (registered on connect to `NEXT_PUBLIC_SITE_URL/api/shopify/webhooks`): `orders/create|updated|cancelled`, `products/create|update|delete`, `customers/create|update`, `inventory_levels/update`, `app/uninstalled`. Each delivery is verified (`X-Shopify-Hmac-Sha256`, client secret), deduped by `X-Shopify-Webhook-Id`, then the resource is re-read via GraphQL and upserted. Deleted products are archived. Uninstall clears the tokens.
+- **Write-back**: stock adjustments on Shopify products call `inventoryAdjustQuantities` (first active location, compare-and-swap, idempotency key) and then record Shopify's resulting quantity. Approved refunds on Shopify orders call `refundCreate` against the captured payment *before* the approval is recorded (idempotency key = approval id); a failure leaves the approval pending. Refunds on Shopify orders always need human approval (the AI never auto-refunds them). Fulfilment/cancellation of Shopify orders happens in Shopify.
+- **Cron**: `vercel.json` runs `/api/cron/shopify-sync` daily at 03:00 UTC (Hobby-plan compatible) as a backstop; it includes a full product pass because inventory changes don't bump a product's `updated_at`.
+
 ## Security model
 
 - Every tenant row has `workspace_id`; RLS allows access only to members (`is_workspace_member`) and restricts destructive or configuration changes to owners/admins (`has_workspace_role`).
 - Stock is changed only through the `inventory_movements` ledger; orders are created atomically by `create_order`, which refuses to oversell.
 - Approvals can only be decided by owners/admins, require a rationale, and are audited. `audit_events` and `inventory_movements` have no update/delete policies.
-- The app never uses the service-role key for user flows.
+- The service-role key is used only by the Shopify connector (credential storage, sync, webhooks, cron), always after a server-side role check or a verified Shopify signature.
 
 ## Scripts
 
@@ -112,16 +130,16 @@ npm run dev        # local development
 npm run typecheck  # tsc --noEmit
 npm run lint       # next lint
 npm run build      # production build
+npm test           # unit tests (HMAC verification, encryption, Shopify mapping)
 ```
 
 ## Roadmap
 
-1. Shopify OAuth + product/order/customer sync (upserts into the existing tables via `source`/`external_id`)
-2. Channel connectors: WhatsApp Business, Instagram DMs, email — inbound webhooks and real outbound sending
-3. Payment provider integration (Paystack/Flutterwave/Stripe) so approved refunds move money
-4. Variant management UI, bulk import/export
-5. Billing, plan limits and usage metering
-6. Durable rate limiting and AI evaluation suite
+1. Channel connectors: WhatsApp Business, Instagram DMs, email — inbound webhooks and real outbound sending
+2. Payment provider integration (Paystack/Flutterwave/Stripe) so approved refunds move money
+3. Variant management UI, bulk import/export
+4. Billing, plan limits and usage metering
+5. Durable rate limiting and AI evaluation suite
 
 ## Origin
 

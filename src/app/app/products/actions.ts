@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { canManage, requireWorkspace } from '@/lib/workspace'
 import { num, str } from '@/lib/utils'
 import type { ActionState } from '@/lib/types'
+import { pushInventoryAdjustment } from '@/lib/shopify/writeback'
 
 const productSchema = z.object({
   title: z.string().min(1, 'Give the product a title').max(200),
@@ -105,14 +106,17 @@ export async function adjustStock(_: ActionState, fd: FormData): Promise<ActionS
   if (!qty && mode !== 'set') return { error: 'Enter a quantity' }
   if (qty < 0) return { error: 'Use a positive number' }
 
-  const { supabase, workspace } = await requireWorkspace()
+  const { supabase, workspace, user } = await requireWorkspace()
   const { data: product } = await supabase
     .from('products')
-    .select('stock_quantity')
+    .select('stock_quantity, source')
     .eq('id', id)
     .eq('workspace_id', workspace.id)
-    .single<{ stock_quantity: number }>()
+    .single<{ stock_quantity: number; source: string }>()
   if (!product) return { error: 'Product not found' }
+
+  // Shopify-synced products: Shopify owns stock, so push the change there first.
+  if (product.source === 'shopify') return adjustShopifyStock({ fd, productId: id, qty, mode, note, workspaceId: workspace.id, userId: user.id })
 
   const delta = mode === 'set' ? qty - product.stock_quantity : mode === 'remove' ? -qty : qty
   if (delta === 0) return { ok: true, message: 'Stock unchanged.' }
@@ -124,6 +128,67 @@ export async function adjustStock(_: ActionState, fd: FormData): Promise<ActionS
   revalidatePath(`/app/products/${id}`)
   revalidatePath('/app/products')
   return { ok: true, message: `Stock is now ${newStock}.` }
+}
+
+async function adjustShopifyStock(args: {
+  fd: FormData
+  productId: string
+  qty: number
+  mode: string
+  note: string | null
+  workspaceId: string
+  userId: string
+}): Promise<ActionState> {
+  const { supabase } = await requireWorkspace()
+  const { data: variants } = await supabase
+    .from('product_variants')
+    .select('id, title, external_id, external_inventory_item_id, stock_quantity, track_inventory')
+    .eq('product_id', args.productId)
+    .eq('workspace_id', args.workspaceId)
+    .order('created_at')
+  const rows = (variants ?? []) as {
+    id: string
+    title: string
+    external_id: string | null
+    external_inventory_item_id: string | null
+    stock_quantity: number
+    track_inventory: boolean
+  }[]
+  const wanted = str(args.fd.get('variant_id'))
+  const variant = wanted ? rows.find(v => v.id === wanted) : rows.length === 1 ? rows[0] : undefined
+  if (!variant) return { error: rows.length > 1 ? 'Choose which variant to adjust.' : 'This product has no Shopify variant to adjust. Run a Shopify sync first.' }
+  if (!variant.track_inventory) return { error: 'Shopify does not track inventory for this variant.' }
+  if (!variant.external_id || !variant.external_inventory_item_id) return { error: 'This variant is missing its Shopify inventory item. Run a Shopify sync first.' }
+
+  const delta = args.mode === 'set' ? args.qty - variant.stock_quantity : args.mode === 'remove' ? -args.qty : args.qty
+  if (delta === 0) return { ok: true, message: 'Stock unchanged.' }
+  const reason = args.mode === 'add' ? 'restock' : 'adjustment'
+
+  try {
+    const newQty = await pushInventoryAdjustment({
+      workspaceId: args.workspaceId,
+      variantExternalId: variant.external_id,
+      inventoryItemId: variant.external_inventory_item_id,
+      delta,
+      reason,
+      note: args.note,
+      userId: args.userId,
+    })
+    await supabase.from('audit_events').insert({
+      workspace_id: args.workspaceId,
+      actor_type: 'user',
+      actor_id: args.userId,
+      action: 'shopify.inventory_adjusted',
+      entity_type: 'product',
+      entity_id: args.productId,
+      metadata: { variant: variant.title, delta, reason, note: args.note, new_quantity: newQty },
+    })
+    revalidatePath(`/app/products/${args.productId}`)
+    revalidatePath('/app/products')
+    return { ok: true, message: `Updated in Shopify. ${rows.length > 1 ? `${variant.title} now has` : 'Stock is now'} ${newQty}.` }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Could not update stock in Shopify' }
+  }
 }
 
 export async function deleteProduct(fd: FormData) {

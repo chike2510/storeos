@@ -92,6 +92,10 @@ export interface Order {
   id: string
   workspace_id: string
   source: string
+  external_id?: string | null
+  external_name?: string | null
+  financial_status?: string | null
+  fulfillment_status?: string | null
   order_number: number
   customer_id: string | null
   status: OrderStatus

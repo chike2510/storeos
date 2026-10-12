@@ -48,7 +48,9 @@ export default async function OrderPage({ params, searchParams }: { params: { id
             Order {orderLabel(order.order_number)} <OrderStatusBadge status={order.status} />
           </span>
         }
-        description={`${formatDateTime(order.created_at)} · via ${humanize(order.channel)}`}
+        description={`${formatDateTime(order.created_at)} · via ${humanize(order.channel)}${
+          order.source === 'shopify' && order.external_name ? ` · Shopify ${order.external_name}` : ''
+        }`}
       />
 
       {searchParams.created ? (
@@ -118,7 +120,14 @@ export default async function OrderPage({ params, searchParams }: { params: { id
         </div>
 
         <div className="space-y-6">
-          <StatusActions action={setOrderStatus} orderId={order.id} status={order.status} total={Number(order.total)} currency={order.currency} />
+          <StatusActions
+            action={setOrderStatus}
+            orderId={order.id}
+            status={order.status}
+            total={order.source === 'shopify' ? Number(order.total) - Number(order.refunded_amount) : Number(order.total)}
+            currency={order.currency}
+            managedBy={order.source === 'shopify' ? 'shopify' : null}
+          />
 
           <Card>
             <CardHeader title="Customer" />
@@ -174,6 +183,10 @@ function describe(e: AuditEvent) {
       return `Order created as ${String(m.status ?? 'pending')}`
     case 'order.status_changed':
       return `Status changed from ${String(m.from)} to ${String(m.to)}${m.note ? ` — ${String(m.note)}` : ''}`
+    case 'shopify.refund_created':
+      return `Refunded ${String(m.amount)} ${String(m.currency ?? '')} through Shopify`.trim()
+    case 'shopify.refund_failed':
+      return `Shopify refund failed — ${String(m.error ?? 'unknown error')}`
     default:
       return humanize(e.action.replace('.', ' '))
   }

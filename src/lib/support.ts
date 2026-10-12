@@ -130,6 +130,12 @@ export async function triageConversation(ctx: WorkspaceContext, conversationId: 
   const linkedTotal = linkedOrder ? Number(linkedOrder.total) - Number(linkedOrder.refunded_amount) : null
   const resolved = await resolveMessage(classified.result, triageCtx, linkedTotal)
   const { resolution, notes } = enforcePolicy(resolved.result, classified.result, triageCtx, policies, linkedTotal)
+  // Refunds on Shopify orders move real money through Shopify, so they always
+  // go to a human — even within the auto-refund limit.
+  if (resolution.action === 'refund' && linkedOrder?.source === 'shopify' && !resolution.requiresApproval) {
+    resolution.requiresApproval = true
+    notes.push('Refunds on Shopify orders move real money and always need human approval')
+  }
   const autoSend = !resolution.requiresApproval
 
   const { data: decision, error: decErr } = await supabase

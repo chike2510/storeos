@@ -30,6 +30,18 @@ export default async function ProductPage({ params, searchParams }: { params: { 
     .limit(15)
   const movements = (mv ?? []) as InventoryMovement[]
 
+  const fromShopify = product.source === 'shopify'
+  const { data: vr } = fromShopify
+    ? await supabase
+        .from('product_variants')
+        .select('id, title, stock_quantity, track_inventory')
+        .eq('product_id', product.id)
+        .order('created_at')
+    : { data: null }
+  const variants = ((vr ?? []) as { id: string; title: string; stock_quantity: number; track_inventory: boolean }[]).filter(
+    v => v.track_inventory,
+  )
+
   return (
     <>
       <PageHeader
@@ -100,10 +112,25 @@ export default async function ProductPage({ params, searchParams }: { params: { 
             )}
           </Card>
           <Card className="h-fit">
-            <CardHeader title="Adjust stock" description={`On hand: ${formatNumber(product.stock_quantity)}`} />
+            <CardHeader
+              title="Adjust stock"
+              description={fromShopify ? `On hand: ${formatNumber(product.stock_quantity)} · changes are pushed to Shopify` : `On hand: ${formatNumber(product.stock_quantity)}`}
+            />
             <CardBody>
               <ActionForm action={adjustStock} className="space-y-3" resetOnSuccess>
                 <input type="hidden" name="product_id" value={product.id} />
+                {fromShopify && variants.length > 1 ? (
+                  <Select name="variant_id" aria-label="Variant" required defaultValue="">
+                    <option value="" disabled>
+                      Choose a variant
+                    </option>
+                    {variants.map(v => (
+                      <option key={v.id} value={v.id}>
+                        {v.title} · {formatNumber(v.stock_quantity)} on hand
+                      </option>
+                    ))}
+                  </Select>
+                ) : null}
                 <div className="grid grid-cols-2 gap-2">
                   <Select name="mode" defaultValue="add" aria-label="Adjustment type">
                     <option value="add">Add</option>
