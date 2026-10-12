@@ -1,65 +1,37 @@
 import type { Config } from 'tailwindcss'
 
 const config: Config = {
-  content: [
-    './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
-    './src/components/**/*.{js,ts,jsx,tsx,mdx}',
-    './src/app/**/*.{js,ts,jsx,tsx,mdx}',
-  ],
+  content: ['./src/**/*.{js,ts,jsx,tsx,mdx}'],
   theme: {
     extend: {
       colors: {
-        // Living Interface palette
-        void: '#070707',
-        surface: '#0f0f0f',
-        elevated: '#161616',
-        border: '#1f1f1f',
-        muted: '#333333',
-        subtle: '#888888',
-        foreground: '#e8e8e8',
-        white: '#ffffff',
-        // Accent
-        blue: {
-          DEFAULT: '#3b82f6',
-          glow: '#2563eb',
-          dim: '#1d4ed8',
-        },
-        violet: {
-          DEFAULT: '#8b5cf6',
-          glow: '#7c3aed',
+        brand: {
+          50: '#eef4ff',
+          100: '#dbe6fe',
+          200: '#bfd3fe',
+          300: '#93b4fd',
+          400: '#608bfa',
+          500: '#3b65f5',
+          600: '#2547ea',
+          700: '#1d36d7',
+          800: '#1e2fae',
+          900: '#1e2d89',
+          950: '#171d53',
         },
       },
       fontFamily: {
-        sans: ['var(--font-body)', 'system-ui', 'sans-serif'],
-        display: ['var(--font-display)', 'system-ui', 'sans-serif'],
-        mono: ['var(--font-mono)', 'monospace'],
+        sans: ['var(--font-sans)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        mono: ['var(--font-mono)', 'ui-monospace', 'monospace'],
       },
-      animation: {
-        'aurora': 'aurora 8s ease-in-out infinite',
-        'float': 'float 6s ease-in-out infinite',
-        'pulse-glow': 'pulse-glow 2s ease-in-out infinite',
-        'gradient': 'gradient 6s ease infinite',
+      boxShadow: {
+        card: '0 1px 2px 0 rgb(16 24 40 / 0.04), 0 1px 3px 0 rgb(16 24 40 / 0.06)',
+        pop: '0 12px 32px -8px rgb(16 24 40 / 0.18), 0 4px 8px -4px rgb(16 24 40 / 0.06)',
       },
       keyframes: {
-        aurora: {
-          '0%, 100%': { backgroundPosition: '0% 50%' },
-          '50%': { backgroundPosition: '100% 50%' },
-        },
-        float: {
-          '0%, 100%': { transform: 'translateY(0px)' },
-          '50%': { transform: 'translateY(-10px)' },
-        },
-        'pulse-glow': {
-          '0%, 100%': { opacity: '0.4' },
-          '50%': { opacity: '0.8' },
-        },
-        gradient: {
-          '0%, 100%': { backgroundPosition: '0% 50%' },
-          '50%': { backgroundPosition: '100% 50%' },
-        },
+        'fade-in': { from: { opacity: '0', transform: 'translateY(4px)' }, to: { opacity: '1', transform: 'none' } },
       },
-      backdropBlur: {
-        xs: '2px',
+      animation: {
+        'fade-in': 'fade-in 200ms ease-out',
       },
     },
   },

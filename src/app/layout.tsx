@@ -1,51 +1,32 @@
 import type { Metadata, Viewport } from 'next'
-import { Plus_Jakarta_Sans, Unbounded, JetBrains_Mono } from 'next/font/google'
+import { Inter, JetBrains_Mono } from 'next/font/google'
 import './globals.css'
 
-const jakarta = Plus_Jakarta_Sans({
-  subsets: ['latin'],
-  variable: '--font-body',
-  weight: ['400', '500', '600', '700', '800'],
-  display: 'swap',
-})
-
-const unbounded = Unbounded({
-  subsets: ['latin'],
-  variable: '--font-display',
-  weight: ['500', '600', '700', '800', '900'],
-  display: 'swap',
-})
-
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ['latin'],
-  variable: '--font-mono',
-  weight: ['400', '500'],
-  display: 'swap',
-})
+const inter = Inter({ subsets: ['latin'], variable: '--font-sans', display: 'swap' })
+const mono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono', weight: ['400', '500'], display: 'swap' })
 
 export const metadata: Metadata = {
-  title: 'StoreOS — The AI that runs your store',
-  description: 'Autonomous e-commerce operations powered by Qwen Cloud. Neural agent pipeline with real-time reasoning, human-in-the-loop approval, and AI product listing generation.',
-  keywords: ['AI agent', 'e-commerce', 'Qwen', 'autopilot', 'StoreOS', 'hackathon'],
-  authors: [{ name: 'chike2510' }],
+  title: {
+    default: 'StoreOS — The operating system for your store',
+    template: '%s · StoreOS',
+  },
+  description:
+    'StoreOS runs your products, inventory, orders, customers and support in one place — with an AI teammate that drafts replies and listings, and asks before it touches money.',
   openGraph: {
-    title: 'StoreOS — The AI that runs your store',
-    description: 'Autonomous e-commerce operations powered by Qwen Cloud',
+    title: 'StoreOS — The operating system for your store',
+    description: 'Products, orders, customers and AI-assisted support in one calm workspace.',
     type: 'website',
   },
 }
 
 export const viewport: Viewport = {
-  themeColor: '#070707',
-  colorScheme: 'dark',
+  themeColor: '#ffffff',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${jakarta.variable} ${unbounded.variable} ${jetbrainsMono.variable}`}>
-      <body className="bg-void text-foreground antialiased overflow-x-hidden">
-        {children}
-      </body>
+    <html lang="en" className={`${inter.variable} ${mono.variable}`}>
+      <body className="min-h-screen font-sans">{children}</body>
     </html>
   )
 }
