@@ -13,7 +13,7 @@ const productSchema = z.object({
   category: z.string().max(80).nullable(),
   sku: z.string().max(80).nullable(),
   status: z.enum(['active', 'draft', 'archived']),
-  price: z.number({ invalid_type_error: 'Enter a price' }).min(0, 'Price cannot be negative'),
+  price: z.number({ required_error: 'Enter a price', invalid_type_error: 'Enter a price' }).min(0, 'Price cannot be negative'),
   compare_at_price: z.number().min(0).nullable(),
   cost: z.number().min(0).nullable(),
   track_inventory: z.boolean(),
