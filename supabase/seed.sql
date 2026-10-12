@@ -1,0 +1,10 @@
+-- StoreOS demo data
+-- Demo data is per-workspace, so it is loaded through a function rather than
+-- raw inserts. From the app: Onboarding → "Load sample data", or
+-- Settings → General → "Load demo data".
+--
+-- From the SQL editor (runs as the signed-in owner/admin via RLS):
+--   select public.seed_demo_workspace('<workspace-id>');
+--   select public.clear_demo_workspace('<workspace-id>');  -- remove it again
+--
+-- The function definitions live in migrations/20261012000006_demo_seed.sql.
