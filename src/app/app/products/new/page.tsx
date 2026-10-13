@@ -2,19 +2,20 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { PageHeader } from '@/components/ui/misc'
-import { requireWorkspace } from '@/lib/workspace'
+import { canManage, requireWorkspace } from '@/lib/workspace'
+import { catalogCurrency, getShopifyStoreInfo } from '@/lib/shopify/products'
 import { createProduct } from '../actions'
 import { ProductForm } from '../product-form'
 
 export const metadata: Metadata = { title: 'New product' }
 
 export default async function NewProductPage() {
-  const { supabase, workspace } = await requireWorkspace()
-  const { data: policy } = await supabase
-    .from('policies')
-    .select('default_low_stock_threshold')
-    .eq('workspace_id', workspace.id)
-    .maybeSingle()
+  const { supabase, workspace, role } = await requireWorkspace()
+  const [{ data: policy }, shop, currency] = await Promise.all([
+    supabase.from('policies').select('default_low_stock_threshold').eq('workspace_id', workspace.id).maybeSingle(),
+    getShopifyStoreInfo(workspace.id),
+    catalogCurrency(workspace),
+  ])
   return (
     <>
       <PageHeader
@@ -28,8 +29,9 @@ export default async function NewProductPage() {
       <ProductForm
         action={createProduct}
         workspaceId={workspace.id}
-        currency={workspace.currency}
+        currency={currency}
         mode="create"
+        publishTo={shop.connected && canManage(role) ? { shopName: shop.shopName } : undefined}
         defaultThreshold={policy?.default_low_stock_threshold ?? 5}
       />
     </>

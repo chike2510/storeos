@@ -34,12 +34,14 @@ export function Studio({
   saveAction,
   aiLabel,
   demo,
+  publishTo,
 }: {
   workspaceId: string
   currency: string
   saveAction: (s: ActionState, fd: FormData) => Promise<ActionState>
   aiLabel: string
   demo: boolean
+  publishTo?: { shopName: string | null }
 }) {
   const input = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
@@ -168,6 +170,7 @@ export function Studio({
             currency={currency}
             mode="create"
             origin="studio"
+            publishTo={publishTo}
             defaults={{
               title: l.title,
               description,

@@ -23,6 +23,7 @@ import {
   PRODUCT_QUERY,
   PRODUCT_VARIANTS_QUERY,
   PRODUCTS_QUERY,
+  SHOP_QUERY,
 } from './queries'
 
 type Resource = 'products' | 'customers' | 'orders'
@@ -50,7 +51,7 @@ function errorMessage(e: unknown) {
 
 // ─── Fetch + upsert helpers (shared with webhooks) ─────────────────────────
 
-async function allVariants(api: ShopifyAdmin, p: GqlProduct): Promise<GqlVariant[]> {
+export async function allVariants(api: ShopifyAdmin, p: GqlProduct): Promise<GqlVariant[]> {
   const nodes = [...p.variants.nodes]
   let page: PageInfo = p.variants.pageInfo
   while (page.hasNextPage && page.endCursor) {
@@ -171,6 +172,19 @@ export async function runShopifySync(
     .insert({ workspace_id: workspaceId, trigger: opts.trigger, status: 'running' })
     .select('id')
     .single<{ id: string }>()
+
+  // Keep the shop's name/currency current (e.g. the store switched NGN → USD).
+  try {
+    const shop = await new ShopifyAdmin(conn).graphql<{ shop: { name: string; currencyCode: string } }>(SHOP_QUERY)
+    if (shop.shop.currencyCode !== conn.shop_currency || shop.shop.name !== conn.shop_name) {
+      await admin
+        .from('shopify_connections')
+        .update({ shop_currency: shop.shop.currencyCode, shop_name: shop.shop.name })
+        .eq('workspace_id', workspaceId)
+    }
+  } catch {
+    // Not fatal: the resource sync below reports auth/API problems.
+  }
 
   const deadline = Date.now() + budgetMs
   const state = { ...(conn.sync_state ?? {}) } as Record<Resource, ResourceState>

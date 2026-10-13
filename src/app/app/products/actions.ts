@@ -5,8 +5,10 @@ import { redirect } from 'next/navigation'
 import { z } from 'zod'
 import { canManage, requireWorkspace } from '@/lib/workspace'
 import { num, str } from '@/lib/utils'
-import type { ActionState } from '@/lib/types'
+import type { ActionState, Product } from '@/lib/types'
 import { pushInventoryAdjustment } from '@/lib/shopify/writeback'
+import { getShopifyStoreInfo, publishProductToShopify, pushProductEdit } from '@/lib/shopify/products'
+import { diffShopifyFields, hasChanges, type ShopifyOwnedFields } from '@/lib/shopify/product-writes'
 
 const productSchema = z.object({
   title: z.string().min(1, 'Give the product a title').max(200),
@@ -49,7 +51,9 @@ function parseProduct(fd: FormData) {
 export async function createProduct(_: ActionState, fd: FormData): Promise<ActionState> {
   const parsed = parseProduct(fd)
   if (!parsed.success) return { error: parsed.error.issues[0].message }
-  const { supabase, workspace, user } = await requireWorkspace()
+  const { supabase, workspace, user, role } = await requireWorkspace()
+  const publish = fd.get('publish_shopify') === 'on'
+  if (publish && !canManage(role)) return { error: 'Only owners and admins can publish products to Shopify.' }
 
   const { data, error } = await supabase
     .from('products')
@@ -72,15 +76,73 @@ export async function createProduct(_: ActionState, fd: FormData): Promise<Actio
     metadata: { title: parsed.data.title, source: str(fd.get('origin')) || 'manual' },
   })
 
+  // Optional: publish straight to Shopify (as a draft). The StoreOS product is
+  // kept either way; a failure is shown on the product page, where it can be retried.
+  let suffix = ''
+  if (publish) {
+    const outcome = await publishAndAudit({ workspaceId: workspace.id, productId: data.id, userId: user.id, status: 'draft' })
+    suffix = outcome.ok ? '&published=1' : `&publish_error=${encodeURIComponent(outcome.error.slice(0, 300))}`
+  }
+
   revalidatePath('/app/products')
-  redirect(`/app/products/${data.id}?created=1`)
+  redirect(`/app/products/${data.id}?created=1${suffix}`)
+}
+
+async function publishAndAudit(args: {
+  workspaceId: string
+  productId: string
+  userId: string
+  status: 'draft' | 'active'
+}): Promise<{ ok: true; message: string } | { ok: false; error: string }> {
+  const { supabase } = await requireWorkspace()
+  try {
+    const info = await getShopifyStoreInfo(args.workspaceId)
+    if (!info.connected) return { ok: false, error: 'Connect a Shopify store in Settings → Integrations first.' }
+    const res = await publishProductToShopify({ workspaceId: args.workspaceId, productId: args.productId, status: args.status })
+    await supabase.from('audit_events').insert({
+      workspace_id: args.workspaceId,
+      actor_type: 'user',
+      actor_id: args.userId,
+      action: 'shopify.product_published',
+      entity_type: 'product',
+      entity_id: args.productId,
+      metadata: { external_id: res.externalId, status: res.status, shop: info.shopDomain },
+    })
+    return { ok: true, message: `Published to Shopify as ${res.status === 'active' ? 'an active product' : 'a draft'}.` }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : 'Could not publish to Shopify' }
+  }
+}
+
+export async function publishProduct(_: ActionState, fd: FormData): Promise<ActionState> {
+  const id = str(fd.get('product_id'))
+  const status = str(fd.get('status')) === 'active' ? 'active' : 'draft'
+  const { workspace, user, role } = await requireWorkspace()
+  if (!canManage(role)) return { error: 'Only owners and admins can publish products to Shopify.' }
+  const outcome = await publishAndAudit({ workspaceId: workspace.id, productId: id, userId: user.id, status })
+  if (!outcome.ok) return { error: outcome.error }
+  revalidatePath('/app/products')
+  revalidatePath(`/app/products/${id}`)
+  return { ok: true, message: outcome.message }
 }
 
 export async function updateProduct(_: ActionState, fd: FormData): Promise<ActionState> {
   const id = str(fd.get('id'))
   const parsed = parseProduct(fd)
   if (!parsed.success) return { error: parsed.error.issues[0].message }
-  const { supabase, workspace, user } = await requireWorkspace()
+  const { supabase, workspace, user, role } = await requireWorkspace()
+
+  const { data: current } = await supabase
+    .from('products')
+    .select('*')
+    .eq('id', id)
+    .eq('workspace_id', workspace.id)
+    .maybeSingle<Product>()
+  if (!current) return { error: 'Product not found' }
+
+  if (current.source === 'shopify' && current.external_id) {
+    return updateShopifyProduct({ current, form: parsed.data, workspaceId: workspace.id, userId: user.id, canWrite: canManage(role) })
+  }
 
   const { error } = await supabase.from('products').update(parsed.data).eq('id', id).eq('workspace_id', workspace.id)
   if (error) return { error: error.message }
@@ -96,6 +158,70 @@ export async function updateProduct(_: ActionState, fd: FormData): Promise<Actio
   revalidatePath('/app/products')
   revalidatePath(`/app/products/${id}`)
   return { ok: true, message: 'Product saved.' }
+}
+
+/**
+ * Shopify-sourced product: Shopify owns title, description, type, price,
+ * compare-at, status and tags. Changed fields are pushed to Shopify first and
+ * StoreOS saves Shopify's response; if Shopify refuses, nothing is saved.
+ * Cost and the low-stock alert are StoreOS-only and saved locally.
+ * SKU, inventory tracking and the image stay managed in Shopify.
+ */
+async function updateShopifyProduct(args: {
+  current: Product
+  form: z.infer<typeof productSchema>
+  workspaceId: string
+  userId: string
+  canWrite: boolean
+}): Promise<ActionState> {
+  const { supabase } = await requireWorkspace()
+  const { current, form } = args
+  const owned = (p: ShopifyOwnedFields): ShopifyOwnedFields => ({
+    title: p.title,
+    description: p.description ?? '',
+    category: p.category,
+    price: Number(p.price),
+    compare_at_price: p.compare_at_price === null || p.compare_at_price === undefined ? null : Number(p.compare_at_price),
+    status: p.status,
+    tags: p.tags ?? [],
+  })
+  const changes = diffShopifyFields(owned(current), owned(form))
+  const localChanged =
+    (current.cost === null ? null : Number(current.cost)) !== form.cost || current.low_stock_threshold !== form.low_stock_threshold
+
+  if (hasChanges(changes) && !args.canWrite) {
+    return { error: 'Only owners and admins can change products synced with Shopify (title, description, price, status, tags, type).' }
+  }
+  if (!hasChanges(changes) && !localChanged) return { ok: true, message: 'No changes to save.' }
+
+  if (hasChanges(changes)) {
+    try {
+      await pushProductEdit({ workspaceId: args.workspaceId, productExternalId: current.external_id as string, changes })
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : 'Shopify rejected the change' }
+    }
+  }
+  if (localChanged) {
+    const { error } = await supabase
+      .from('products')
+      .update({ cost: form.cost, low_stock_threshold: form.low_stock_threshold })
+      .eq('id', current.id)
+      .eq('workspace_id', args.workspaceId)
+    if (error) return { error: hasChanges(changes) ? `Saved to Shopify, but cost / low-stock alert failed: ${error.message}` : error.message }
+  }
+
+  await supabase.from('audit_events').insert({
+    workspace_id: args.workspaceId,
+    actor_type: 'user',
+    actor_id: args.userId,
+    action: hasChanges(changes) ? 'shopify.product_updated' : 'product.updated',
+    entity_type: 'product',
+    entity_id: current.id,
+    metadata: hasChanges(changes) ? { fields: Object.keys(changes), external_id: current.external_id } : {},
+  })
+  revalidatePath('/app/products')
+  revalidatePath(`/app/products/${current.id}`)
+  return { ok: true, message: hasChanges(changes) ? 'Saved to Shopify.' : 'Product saved.' }
 }
 
 export async function adjustStock(_: ActionState, fd: FormData): Promise<ActionState> {

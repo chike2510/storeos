@@ -19,6 +19,7 @@ const PRODUCT_FIELDS = /* GraphQL */ `
     id
     title
     description
+    descriptionHtml
     productType
     status
     tags
@@ -254,5 +255,43 @@ export const WEBHOOK_DELETE_MUTATION = /* GraphQL */ `
       deletedWebhookSubscriptionId
       userErrors { field message }
     }
+  }
+`
+
+// ─── Product writes (StoreOS → Shopify) ─────────────────────────────────────
+
+export const PRODUCT_UPDATE_MUTATION = /* GraphQL */ `
+  mutation StoreOSProductUpdate($product: ProductUpdateInput!) {
+    productUpdate(product: $product) {
+      product { ...ProductFields }
+      userErrors { field message }
+    }
+  }
+  ${PRODUCT_FIELDS}
+`
+
+export const PRODUCT_VARIANTS_BULK_UPDATE_MUTATION = /* GraphQL */ `
+  mutation StoreOSVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+    productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+      product { ...ProductFields }
+      userErrors { field message }
+    }
+  }
+  ${PRODUCT_FIELDS}
+`
+
+export const PRODUCT_SET_MUTATION = /* GraphQL */ `
+  mutation StoreOSProductSet($input: ProductSetInput!, $identifier: ProductSetIdentifiers) {
+    productSet(synchronous: true, input: $input, identifier: $identifier) {
+      product { ...ProductFields }
+      userErrors { field message code }
+    }
+  }
+  ${PRODUCT_FIELDS}
+`
+
+export const LOCATIONS_QUERY = /* GraphQL */ `
+  query StoreOSLocations {
+    locations(first: 20) { nodes { id isActive fulfillsOnlineOrders } }
   }
 `

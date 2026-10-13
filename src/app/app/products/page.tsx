@@ -10,6 +10,7 @@ import { TD, TH, THead, TR, Table } from '@/components/ui/table'
 import { requireWorkspace } from '@/lib/workspace'
 import { cn, formatMoney, formatNumber } from '@/lib/utils'
 import type { Product } from '@/lib/types'
+import { catalogCurrency } from '@/lib/shopify/products'
 
 export const metadata: Metadata = { title: 'Products' }
 
@@ -32,7 +33,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: { q
   else query = query.eq('status', filter)
   if (q) query = query.or(`title.ilike.%${q.replace(/[%,()]/g, '')}%,sku.ilike.%${q.replace(/[%,()]/g, '')}%`)
 
-  const { data } = await query
+  const [{ data }, currency] = await Promise.all([query, catalogCurrency(workspace)])
   const products = (data ?? []) as Product[]
 
   return (
@@ -126,7 +127,7 @@ export default async function ProductsPage({ searchParams }: { searchParams: { q
                       <span className="text-zinc-400">Not tracked</span>
                     )}
                   </TD>
-                  <TD className="tabular text-right font-medium text-zinc-900">{formatMoney(p.price, workspace.currency)}</TD>
+                  <TD className="tabular text-right font-medium text-zinc-900">{formatMoney(p.price, currency)}</TD>
                   <TD className="hidden text-zinc-500 lg:table-cell">{p.category || '—'}</TD>
                 </TR>
               ))}

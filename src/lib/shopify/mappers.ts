@@ -19,6 +19,7 @@ export interface GqlProduct {
   id: string
   title: string
   description: string | null
+  descriptionHtml?: string | null
   productType: string | null
   status: string
   tags: string[]
@@ -84,6 +85,8 @@ export interface ProductRow {
   has_variants: boolean
   image_url: string | null
   tags: string[]
+  /** Shopify Product.updatedAt (echo / out-of-order guard). */
+  updated_at: string | null
   variants: {
     external_id: string
     title: string
@@ -136,6 +139,37 @@ export interface OrderRow {
     product_external_id: string | null
     variant_external_id: string | null
   }[]
+}
+
+const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', '#39': "'" }
+
+/**
+ * Shopify descriptionHtml → the plain text StoreOS edits. Keeps paragraph and
+ * line breaks and list bullets (Shopify's own `description` field collapses
+ * everything onto one line, which would lose them on a round trip).
+ */
+export function htmlToText(html: string | null | undefined): string {
+  if (!html) return ''
+  return html
+    .replace(/\r\n?/g, '\n')
+    .replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, '')
+    .replace(/\n/g, ' ')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<li[^>]*>/gi, '• ')
+    .replace(/<\/(li)>/gi, '\n')
+    .replace(/<\/(p|div|h[1-6]|ul|ol|blockquote)>/gi, '\n\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&(#\d+|#x[0-9a-f]+|[a-z0-9]+);/gi, (m, e: string) => {
+      const k = e.toLowerCase()
+      if (k.startsWith('#x')) return String.fromCodePoint(parseInt(k.slice(2), 16))
+      if (k.startsWith('#') && k !== '#39') return String.fromCodePoint(parseInt(k.slice(1), 10))
+      return ENTITIES[k] ?? m
+    })
+    .split('\n')
+    .map(l => l.replace(/[ \t]+/g, ' ').trim())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
 }
 
 export function money(m: Money): string {
@@ -200,7 +234,7 @@ export function mapProduct(p: GqlProduct, variants: GqlVariant[]): ProductRow {
   return {
     external_id: p.id,
     title: (p.title || 'Untitled product').slice(0, 200),
-    description: (p.description ?? '').slice(0, 5000),
+    description: (typeof p.descriptionHtml === 'string' ? htmlToText(p.descriptionHtml) : p.description ?? '').slice(0, 5000),
     category: p.productType ? p.productType.slice(0, 80) : null,
     sku: first?.sku || null,
     status: mapProductStatus(p.status),
@@ -210,6 +244,7 @@ export function mapProduct(p: GqlProduct, variants: GqlVariant[]): ProductRow {
     has_variants: hasRealVariants,
     image_url: p.featuredMedia?.preview?.image?.url ?? null,
     tags: (p.tags ?? []).map(t => t.trim().toLowerCase()).filter(Boolean).slice(0, 20),
+    updated_at: p.updatedAt || null,
     variants: variants.map(v => ({
       external_id: v.id,
       title: v.title || 'Default',

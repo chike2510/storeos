@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, Trash2 } from 'lucide-react'
+import { ArrowLeft, ExternalLink, Trash2 } from 'lucide-react'
 import { Badge, humanize } from '@/components/ui/badge'
 import { Card, CardBody, CardHeader } from '@/components/ui/card'
 import { ConfirmButton } from '@/components/ui/confirm-button'
@@ -11,12 +11,20 @@ import { Alert, PageHeader } from '@/components/ui/misc'
 import { canManage, requireWorkspace } from '@/lib/workspace'
 import { cn, formatDateTime, formatNumber } from '@/lib/utils'
 import type { InventoryMovement, Product } from '@/lib/types'
-import { adjustStock, deleteProduct, updateProduct } from '../actions'
+import { catalogCurrency, getShopifyStoreInfo } from '@/lib/shopify/products'
+import { shopifyAdminProductUrl } from '@/lib/shopify/product-writes'
+import { adjustStock, deleteProduct, publishProduct, updateProduct } from '../actions'
 import { ProductForm } from '../product-form'
 
 export const metadata: Metadata = { title: 'Product' }
 
-export default async function ProductPage({ params, searchParams }: { params: { id: string }; searchParams: { created?: string } }) {
+export default async function ProductPage({
+  params,
+  searchParams,
+}: {
+  params: { id: string }
+  searchParams: { created?: string; published?: string; publish_error?: string }
+}) {
   const { supabase, workspace, role } = await requireWorkspace()
   const { data } = await supabase.from('products').select('*').eq('id', params.id).eq('workspace_id', workspace.id).maybeSingle()
   if (!data) notFound()
@@ -31,6 +39,9 @@ export default async function ProductPage({ params, searchParams }: { params: { 
   const movements = (mv ?? []) as InventoryMovement[]
 
   const fromShopify = product.source === 'shopify'
+  const [shop, currency] = await Promise.all([getShopifyStoreInfo(workspace.id), catalogCurrency(workspace)])
+  const shopifyUrl = fromShopify ? shopifyAdminProductUrl(shop.shopDomain, product.external_id) : null
+  const canPublish = product.source === 'storeos' && shop.connected && canManage(role)
   const { data: vr } = fromShopify
     ? await supabase
         .from('product_variants')
@@ -56,6 +67,11 @@ export default async function ProductPage({ params, searchParams }: { params: { 
             <Badge tone={product.status === 'active' ? 'green' : 'neutral'}>{humanize(product.status)}</Badge>
             {product.is_low_stock ? <Badge tone="amber">Low stock</Badge> : null}
             {product.source !== 'storeos' ? <Badge tone="violet">Synced from {product.source}</Badge> : null}
+            {shopifyUrl ? (
+              <a href={shopifyUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-brand-700 hover:underline">
+                View in Shopify <ExternalLink className="h-3 w-3" />
+              </a>
+            ) : null}
           </span>
         }
         actions={
@@ -72,11 +88,49 @@ export default async function ProductPage({ params, searchParams }: { params: { 
 
       {searchParams.created ? (
         <Alert tone="success" className="mb-6">
-          Product created.
+          {searchParams.published ? 'Product created and published to Shopify as a draft.' : 'Product created.'}
+        </Alert>
+      ) : null}
+      {searchParams.publish_error ? (
+        <Alert tone="error" className="mb-6" title="Not published to Shopify">
+          {searchParams.publish_error}
+        </Alert>
+      ) : null}
+      {fromShopify && !canManage(role) ? (
+        <Alert tone="info" className="mb-6">
+          This product is synced with Shopify. Only owners and admins can change its title, description, prices, status or tags.
         </Alert>
       ) : null}
 
-      <ProductForm action={updateProduct} workspaceId={workspace.id} currency={workspace.currency} product={product} mode="edit" />
+      <ProductForm
+        action={updateProduct}
+        workspaceId={workspace.id}
+        currency={currency}
+        product={product}
+        mode="edit"
+        shopifyManaged={fromShopify}
+      />
+
+      {canPublish ? (
+        <Card className="mt-6">
+          <CardHeader
+            title="Publish to Shopify"
+            description={`Create this product in ${shop.shopName || shop.shopDomain || 'your Shopify store'}. Prices are sent as entered, in ${shop.currency || currency}. After publishing, Shopify owns its title, description, prices, status and tags, and edits here are pushed there.`}
+          />
+          <CardBody>
+            <ActionForm action={publishProduct} className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <input type="hidden" name="product_id" value={product.id} />
+              <Select name="status" defaultValue="draft" aria-label="Status in Shopify" className="sm:w-56">
+                <option value="draft">As a draft (hidden)</option>
+                <option value="active">As active (visible)</option>
+              </Select>
+              <SubmitButton variant="secondary" pendingText="Publishing…">
+                Publish to Shopify
+              </SubmitButton>
+            </ActionForm>
+          </CardBody>
+        </Card>
+      ) : null}
 
       {product.track_inventory ? (
         <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">

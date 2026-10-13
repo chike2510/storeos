@@ -4,6 +4,7 @@ import { assertNoUserErrors, type ShopifyAdmin } from './admin-api'
 import { SHOPIFY_WEBHOOK_TOPICS, shopifyWebhookUrl } from './config'
 import { updateConnection, type ShopifyConnection } from './connection'
 import { toGid } from './mappers'
+import { isStaleProductWebhook } from './product-writes'
 import { INVENTORY_ITEM_QUERY, WEBHOOK_CREATE_MUTATION, WEBHOOK_DELETE_MUTATION, WEBHOOK_SUBSCRIPTIONS_QUERY } from './queries'
 import { syncCustomerById, syncOrderById, syncProductById } from './sync'
 
@@ -91,7 +92,19 @@ export async function processWebhook(api: ShopifyAdmin, conn: ShopifyConnection,
     case 'products/create':
     case 'products/update': {
       const gid = gidOf('Product', payload)
-      return gid ? syncProductById(api, ws, gid) : 0
+      if (!gid) return 0
+      // Echo guard: our own productUpdate/productSet already mirrored this
+      // version (or a newer one), so skip the re-read. Even without this the
+      // re-read is idempotent, and the upsert refuses older data.
+      const { data: existing } = await createAdminClient()
+        .from('products')
+        .select('external_updated_at')
+        .eq('workspace_id', ws)
+        .eq('source', 'shopify')
+        .eq('external_id', gid)
+        .maybeSingle<{ external_updated_at: string | null }>()
+      if (existing && isStaleProductWebhook(payload.updated_at, existing.external_updated_at)) return 0
+      return syncProductById(api, ws, gid)
     }
     case 'products/delete': {
       const gid = gidOf('Product', payload)
